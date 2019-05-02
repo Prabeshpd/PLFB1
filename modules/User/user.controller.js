@@ -5,7 +5,7 @@ const userAuthModel = require("./user.auth.model");
 const UserCommsModel = require("./user.comms.model");
 const UserModel = require("./user.model");
 const Token = require("../../utils/tokenManager");
-const Secure = require("../../utils/secure")
+const Secure = require("../../utils/secure");
 
 const tokenManager = new Token({ appSecret });
 
@@ -60,25 +60,33 @@ class UserController {
   }
 
   async create(payload, options) {
+    console.log(payload);
+    console.log(options);
     try {
-      let username;
-      if (options.type === "email") username = payload.email;
-      if (options.type === "phone") username = payload.phone;
-      username = payload.username;
-      let authexists = await this.checkUserAuth({ username });
-      if (authexists) throwErr("User Already Exists");
+      let username = payload.email;
+      // if (options.type === "phone") username = payload.phone;
+      // username = payload.username;
+      console.log(username);
+      // let authexists = await this.checkUserAuth(username);
+      // console.log(authexists);
+      // if (authexists) throwErr("User Already Exists");
       let users = new UserModel(payload);
-      let password = Secure.saltAndHash(payload.password)
-      delete users.password
+      let password = await Secure.saltAndHash(payload.password);
+      console.log(password);
+      delete users.password;
       users.password = {
         hash: password.hash.toString("base64"),
         salt: password.salt.toString("base64")
-      }
-      await users.save();
+      };
+      console.log(users);
+      // yah error 6 hera hai
+      let u = await users.save();
+      console.log(u);
       let authPayload = {
         username: username,
         user_id: users._id
       };
+      console.log("_____=============");
       try {
         let comms = [];
         if (payload.email) {
@@ -115,9 +123,11 @@ class UserController {
 
   //ToDo send email after registrationComplete
   async createUsingEmail(payload, options = {}) {
+    console.log(payload);
     try {
       options.type = "email";
       let user = await this.create(payload, options);
+      console.log(user);
       return user;
     } catch (e) {
       return e;
@@ -134,35 +144,37 @@ class UserController {
     }
   }
 
-  async checkUserAuth({ username }) {
-    let username = await userAuthModel.find({ username: username });
-    return username ? true : false;
-  }
+  // async checkUserAuth(username) {
+  //   console.log(username);
+  //   let user = await userAuthModel.find({ username });
+  //   console.log(user);
+  //   return user ? true : false;
+  // }
 
   async generateToken(user) {
     let data = {
       user_id: user.id,
       roles: user.roles,
       name: name.user.full
-    }
-    return tokenManager.generate(data, this.jwtDuration)
+    };
+    return tokenManager.generate(data, this.jwtDuration);
   }
 
   getById(id, options) {
-    let showPassword = {password: 0}
-    if(options.pwd) showPassword = {}
-    return UserModel.findById({_id: id, is_active:true}, showPassword).populate("comms");
+    let showPassword = { password: 0 };
+    if (options.pwd) showPassword = {};
+    return UserModel.findById({ _id: id, is_active: true }, showPassword).populate("comms");
   }
 
-  async getByUsername({ username, type , options}) {
+  async getByUsername({ username, type, options }) {
     let userAuth = await userAuthModel.findOne({ username, type });
     if (userAuth.length == 0) return null;
     let user = await this.getById(userAuth[0].user_id, options);
-    return user
+    return user;
   }
 
-  login({username, password, options}) {
-    return this.authenticate({username, password, options});
+  login({ username, password, options }) {
+    return this.authenticate({ username, password, options });
   }
 
   async remove({ user_id }) {
@@ -177,18 +189,17 @@ class UserController {
 
   async verifyLogin({ username, password, type }) {
     try {
-    if (!username) throw "UserName is required";
-    if (!password) throw "Password is required";
-    let user = await this.getByUsername({ username, type, options= {pwd: true} });
-    password = Secure.hash(password, Buffer.from(user.password.salt, "base64"))
-    if(user.password.hash !== password.hash.toString("base64")) throw Error ("Invalid Login Options")
-    user.password = null
-    return user
+      if (!username) throw "UserName is required";
+      if (!password) throw "Password is required";
+      let user = await this.getByUsername({ username, type, options: { pwd: true } });
+      password = Secure.hash(password, Buffer.from(user.password.salt, "base64"));
+      if (user.password.hash !== password.hash.toString("base64"))
+        throw Error("Invalid Login Options");
+      user.password = null;
+      return user;
+    } catch (e) {
+      return e;
     }
-    catch(e) {
-      return e
-    }
-
   }
 }
 
